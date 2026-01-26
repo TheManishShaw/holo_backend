@@ -4,6 +4,8 @@ import cors from "cors";
 import connectDB from "./config/db";
 import authRoutes from "./routes/authRoutes";
 
+import { sendResponse } from "./utils/responseHandler";
+
 dotenv.config();
 
 const port = process.env.PORT || 5000;
@@ -19,7 +21,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use("/api/auth", authRoutes);
 
 app.get("/", (req, res) => {
-  res.send("API is running...");
+  sendResponse(res, 200, true, "API is running...");
 });
 
 app.listen(port, () => {

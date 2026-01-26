@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
+import { sendResponse } from "../utils/responseHandler";
 
 interface AuthRequest extends Request {
   user?: any;
@@ -10,7 +11,7 @@ export const protect = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+): Promise<any> => {
   let token;
 
   if (
@@ -30,14 +31,15 @@ export const protect = async (
       // Get user from the token
       req.user = await User.findById(decoded.id).select("-password");
 
-      next();
+      return next();
     } catch (error) {
       console.error(error);
-      res.status(401).json({ message: "Not authorized" });
+      return sendResponse(res, 401, false, "Not authorized");
     }
   }
 
   if (!token) {
-    res.status(401).json({ message: "Not authorized, no token" });
+    return sendResponse(res, 401, false, "Not authorized, no token");
   }
 };
+

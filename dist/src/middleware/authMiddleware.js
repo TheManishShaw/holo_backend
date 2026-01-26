@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.protect = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
+const responseHandler_1 = require("../utils/responseHandler");
 const protect = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     let token;
     if (req.headers.authorization &&
@@ -26,15 +27,15 @@ const protect = (req, res, next) => __awaiter(void 0, void 0, void 0, function* 
             const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET || "secret");
             // Get user from the token
             req.user = yield User_1.default.findById(decoded.id).select("-password");
-            next();
+            return next();
         }
         catch (error) {
             console.error(error);
-            res.status(401).json({ message: "Not authorized" });
+            return (0, responseHandler_1.sendResponse)(res, 401, false, "Not authorized");
         }
     }
     if (!token) {
-        res.status(401).json({ message: "Not authorized, no token" });
+        return (0, responseHandler_1.sendResponse)(res, 401, false, "Not authorized, no token");
     }
 });
 exports.protect = protect;

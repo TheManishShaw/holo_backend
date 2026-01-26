@@ -18,6 +18,7 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
 const OTP_1 = __importDefault(require("../models/OTP"));
 const emailService_1 = require("../utils/emailService");
+const responseHandler_1 = require("../utils/responseHandler");
 // Generate JWT Token
 const generateToken = (id) => {
     return jsonwebtoken_1.default.sign({ id }, process.env.JWT_SECRET || "secret", {
@@ -31,14 +32,12 @@ const registerUser = (req, res) => __awaiter(void 0, void 0, void 0, function* (
     const { fullName, email, password } = req.body;
     try {
         if (!fullName || !email || !password) {
-            res.status(400).json({ message: "Please add all fields" });
-            return;
+            return (0, responseHandler_1.sendResponse)(res, 400, false, "Please add all fields");
         }
         // Check if user exists
         const userExists = yield User_1.default.findOne({ email });
         if (userExists) {
-            res.status(400).json({ message: "User already exists" });
-            return;
+            return (0, responseHandler_1.sendResponse)(res, 400, false, "User already exists");
         }
         // Hash password
         const salt = yield bcryptjs_1.default.genSalt(10);
@@ -50,7 +49,7 @@ const registerUser = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             password: hashedPassword,
         });
         if (user) {
-            res.status(201).json({
+            return (0, responseHandler_1.sendResponse)(res, 201, true, "User registered successfully", {
                 _id: user.id,
                 fullName: user.fullName,
                 email: user.email,
@@ -58,11 +57,11 @@ const registerUser = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             });
         }
         else {
-            res.status(400).json({ message: "Invalid user data" });
+            return (0, responseHandler_1.sendResponse)(res, 400, false, "Invalid user data");
         }
     }
     catch (error) {
-        res.status(500).json({ message: error.message });
+        return (0, responseHandler_1.sendResponse)(res, 500, false, error.message);
     }
 });
 exports.registerUser = registerUser;
@@ -74,7 +73,7 @@ const loginUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const user = yield User_1.default.findOne({ email });
         if (user && (yield bcryptjs_1.default.compare(password, user.password || ""))) {
-            res.json({
+            return (0, responseHandler_1.sendResponse)(res, 200, true, "Login successful", {
                 _id: user.id,
                 fullName: user.fullName,
                 email: user.email,
@@ -82,11 +81,11 @@ const loginUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
         }
         else {
-            res.status(401).json({ message: "Invalid credentials" });
+            return (0, responseHandler_1.sendResponse)(res, 401, false, "Invalid credentials");
         }
     }
     catch (error) {
-        res.status(500).json({ message: error.message });
+        return (0, responseHandler_1.sendResponse)(res, 500, false, error.message);
     }
 });
 exports.loginUser = loginUser;
@@ -96,14 +95,14 @@ exports.loginUser = loginUser;
 const getMe = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const user = yield User_1.default.findById(req.user.id);
     if (user) {
-        res.status(200).json({
+        return (0, responseHandler_1.sendResponse)(res, 200, true, "User data fetched successfully", {
             id: user._id,
             fullName: user.fullName,
             email: user.email,
         });
     }
     else {
-        res.status(404).json({ message: "User not found" });
+        return (0, responseHandler_1.sendResponse)(res, 404, false, "User not found");
     }
 });
 exports.getMe = getMe;
@@ -116,10 +115,7 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
         const user = yield User_1.default.findOne({ email });
         if (!user) {
             // For security, don't reveal if user exists
-            res.status(200).json({
-                message: "Success, an OTP has been sent.",
-            });
-            return;
+            return (0, responseHandler_1.sendResponse)(res, 200, true, "Success, an OTP has been sent.");
         }
         // Generate 6-digit OTP
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -134,16 +130,14 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
         // Send OTP via email
         const emailSent = yield (0, emailService_1.sendOTPEmail)(email, otpCode);
         if (emailSent) {
-            res.status(200).json({
-                message: "Success, an OTP has been sent.",
-            });
+            return (0, responseHandler_1.sendResponse)(res, 200, true, "Success, an OTP has been sent.");
         }
         else {
-            res.status(500).json({ message: "Error sending OTP email" });
+            return (0, responseHandler_1.sendResponse)(res, 500, false, "Error sending OTP email");
         }
     }
     catch (error) {
-        res.status(500).json({ message: error.message });
+        return (0, responseHandler_1.sendResponse)(res, 500, false, error.message);
     }
 });
 exports.forgotPassword = forgotPassword;
@@ -160,21 +154,19 @@ const verifyOTP = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             expiresAt: { $gt: new Date() },
         });
         if (!otpRecord) {
-            res.status(400).json({ message: "Invalid or expired OTP" });
-            return;
+            return (0, responseHandler_1.sendResponse)(res, 400, false, "Invalid or expired OTP");
         }
         // Mark OTP as used
         otpRecord.isUsed = true;
         yield otpRecord.save();
         // Generate a temporary reset token (valid for 15 minutes)
         const resetToken = jsonwebtoken_1.default.sign({ email, purpose: "password_reset" }, process.env.JWT_SECRET || "secret", { expiresIn: "15m" });
-        res.status(200).json({
-            message: "OTP verified successfully",
+        return (0, responseHandler_1.sendResponse)(res, 200, true, "OTP verified successfully", {
             resetToken,
         });
     }
     catch (error) {
-        res.status(500).json({ message: error.message });
+        return (0, responseHandler_1.sendResponse)(res, 500, false, error.message);
     }
 });
 exports.verifyOTP = verifyOTP;
@@ -187,14 +179,12 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         // Verify reset token
         const decoded = jsonwebtoken_1.default.verify(resetToken, process.env.JWT_SECRET || "secret");
         if (!decoded || decoded.purpose !== "password_reset") {
-            res.status(400).json({ message: "Invalid or expired reset token" });
-            return;
+            return (0, responseHandler_1.sendResponse)(res, 400, false, "Invalid or expired reset token");
         }
         const email = decoded.email;
         const user = yield User_1.default.findOne({ email });
         if (!user) {
-            res.status(404).json({ message: "User not found" });
-            return;
+            return (0, responseHandler_1.sendResponse)(res, 404, false, "User not found");
         }
         // Hash new password
         const salt = yield bcryptjs_1.default.genSalt(10);
@@ -204,10 +194,10 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         yield user.save();
         // Invalidate any remaining OTPs for this email
         yield OTP_1.default.updateMany({ email }, { isUsed: true });
-        res.status(200).json({ message: "Password reset successfully" });
+        return (0, responseHandler_1.sendResponse)(res, 200, true, "Password reset successfully");
     }
     catch (error) {
-        res.status(400).json({ message: "Invalid or expired reset token" });
+        return (0, responseHandler_1.sendResponse)(res, 400, false, "Invalid or expired reset token");
     }
 });
 exports.resetPassword = resetPassword;

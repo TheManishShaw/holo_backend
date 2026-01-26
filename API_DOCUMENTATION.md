@@ -23,10 +23,14 @@ Creates a new user account.
 **Success Response (201 Created):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "fullName": "John Doe",
-  "email": "john@example.com",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "status": true,
+  "message": "User registered successfully",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "fullName": "John Doe",
+    "email": "john@example.com",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
 }
 ```
 
@@ -34,13 +38,17 @@ Creates a new user account.
 - **400 Bad Request** - Missing fields
   ```json
   {
-    "message": "Please add all fields"
+    "status": false,
+    "message": "Please add all fields",
+    "data": null
   }
   ```
 - **400 Bad Request** - User already exists
   ```json
   {
-    "message": "User already exists"
+    "status": false,
+    "message": "User already exists",
+    "data": null
   }
   ```
 
@@ -62,10 +70,14 @@ Authenticates a user and returns a JWT token.
 **Success Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "fullName": "John Doe",
-  "email": "john@example.com",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "status": true,
+  "message": "Login successful",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "fullName": "John Doe",
+    "email": "john@example.com",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
 }
 ```
 
@@ -73,7 +85,9 @@ Authenticates a user and returns a JWT token.
 - **401 Unauthorized** - Invalid credentials
   ```json
   {
-    "message": "Invalid credentials"
+    "status": false,
+    "message": "Invalid credentials",
+    "data": null
   }
   ```
 
@@ -92,9 +106,13 @@ Authorization: Bearer <your_jwt_token>
 **Success Response (200 OK):**
 ```json
 {
-  "id": "507f1f77bcf86cd799439011",
-  "fullName": "John Doe",
-  "email": "john@example.com"
+  "status": true,
+  "message": "User data fetched successfully",
+  "data": {
+    "id": "507f1f77bcf86cd799439011",
+    "fullName": "John Doe",
+    "email": "john@example.com"
+  }
 }
 ```
 
@@ -102,13 +120,17 @@ Authorization: Bearer <your_jwt_token>
 - **401 Unauthorized** - No token or invalid token
   ```json
   {
-    "message": "Not authorized, no token"
+    "status": false,
+    "message": "Not authorized, no token",
+    "data": null
   }
   ```
 - **404 Not Found** - User not found
   ```json
   {
-    "message": "User not found"
+    "status": false,
+    "message": "User not found",
+    "data": null
   }
   ```
 
@@ -129,7 +151,9 @@ Sends a 6-digit OTP to the user's email for password reset verification.
 **Success Response (200 OK):**
 ```json
 {
-  "message": "If an account exists with that email, an OTP has been sent."
+  "status": true,
+  "message": "Success, an OTP has been sent.",
+  "data": null
 }
 ```
 
@@ -151,8 +175,11 @@ Verifies the 6-digit OTP sent to the email and returns a temporary reset token.
 **Success Response (200 OK):**
 ```json
 {
+  "status": true,
   "message": "OTP verified successfully",
-  "resetToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "data": {
+    "resetToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
 }
 ```
 
@@ -160,7 +187,9 @@ Verifies the 6-digit OTP sent to the email and returns a temporary reset token.
 - **400 Bad Request** - Invalid or expired OTP
   ```json
   {
-    "message": "Invalid or expired OTP"
+    "status": false,
+    "message": "Invalid or expired OTP",
+    "data": null
   }
   ```
 
@@ -182,15 +211,19 @@ Resets the user's password using the temporary reset token obtained from OTP ver
 **Success Response (200 OK):**
 ```json
 {
-  "message": "Password reset successfully"
-  }
+  "status": true,
+  "message": "Password reset successfully",
+  "data": null
+}
 ```
 
 **Error Response:**
 - **400 Bad Request** - Invalid or expired reset token
   ```json
   {
-    "message": "Invalid or expired reset token"
+    "status": false,
+    "message": "Invalid or expired reset token",
+    "data": null
   }
   ```
 
