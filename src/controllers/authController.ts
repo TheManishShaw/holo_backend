@@ -120,7 +120,7 @@ export const forgotPassword = async (
     if (!user) {
       // For security, don't reveal if user exists
       res.status(200).json({
-        message: "If an account exists with that email, an OTP has been sent.",
+        message: "Success, an OTP has been sent.",
       });
       return;
     }
@@ -143,7 +143,7 @@ export const forgotPassword = async (
 
     if (emailSent) {
       res.status(200).json({
-        message: "If an account exists with that email, an OTP has been sent.",
+        message: "Success, an OTP has been sent.",
       });
     } else {
       res.status(500).json({ message: "Error sending OTP email" });

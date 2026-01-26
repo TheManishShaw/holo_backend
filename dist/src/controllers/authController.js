@@ -117,7 +117,7 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (!user) {
             // For security, don't reveal if user exists
             res.status(200).json({
-                message: "If an account exists with that email, an OTP has been sent.",
+                message: "Success, an OTP has been sent.",
             });
             return;
         }
@@ -135,7 +135,7 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
         const emailSent = yield (0, emailService_1.sendOTPEmail)(email, otpCode);
         if (emailSent) {
             res.status(200).json({
-                message: "If an account exists with that email, an OTP has been sent.",
+                message: "Success, an OTP has been sent.",
             });
         }
         else {
