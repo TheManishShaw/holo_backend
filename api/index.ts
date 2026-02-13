@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import connectDB from "../src/config/db";
 import authRoutes from "../src/routes/authRoutes";
+import { errorHandler } from "../src/middleware/errorMiddleware";
 
 dotenv.config();
 
@@ -22,6 +23,8 @@ app.get("/", (req: Request, res: Response) => {
 app.get("/api", (req: Request, res: Response) => {
   res.json({ message: "API is running..." });
 });
+
+app.use(errorHandler);
 
 // Connect to database once
 let isConnected = false;
