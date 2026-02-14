@@ -28,8 +28,11 @@ app.get("/", (req, res) => {
 // Error handling middleware
 app.use(errorHandler);
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Server started on port ${port}`);
 });
+
+import { initSocket } from "./socket";
+initSocket(server);
 
 export default app;
