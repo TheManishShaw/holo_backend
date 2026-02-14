@@ -20,17 +20,25 @@ export const registerUser = async (
   req: Request,
   res: Response
 ): Promise<any> => {
-  const { fullName, email, password } = req.body;
+  const { fullName, email, password, phone } = req.body;
 
   try {
-    if (!fullName || !email || !password) {
+    if (!fullName || !email || !password || !phone) {
       return sendResponse(res, 400, false, "Please add all fields");
     }
 
-    // Check if user exists
-    const userExists = await User.findOne({ email });
+    // Check if user exists by email or phone
+    const userExists = await User.findOne({ 
+      $or: [{ email }, { phoneNumber: phone }] 
+    });
 
     if (userExists) {
+      if (userExists.email === email) {
+        return sendResponse(res, 400, false, "Email already registered");
+      }
+      if (userExists.phoneNumber === phone) {
+        return sendResponse(res, 400, false, "Phone number already registered");
+      }
       return sendResponse(res, 400, false, "User already exists");
     }
 
@@ -42,6 +50,7 @@ export const registerUser = async (
     const user = await User.create({
       fullName,
       email,
+      phoneNumber: phone,
       password: hashedPassword,
     });
 
@@ -50,6 +59,7 @@ export const registerUser = async (
         _id: user.id,
         fullName: user.fullName,
         email: user.email,
+        phoneNumber: user.phoneNumber,
         token: generateToken(user.id),
       });
     } else {
@@ -242,17 +252,38 @@ export const checkRegisteredUsers = async (
       return sendResponse(res, 400, false, "Please provide identifiers array");
     }
 
-    // Find users by email (phone support can be added later if needed)
+    // Find users by email OR phone number
     const users = await User.find({
-      email: { $in: identifiers }
-    }).select('_id email fullName');
+      $or: [
+        { email: { $in: identifiers } },
+        { phoneNumber: { $in: identifiers } }
+      ]
+    }).select('_id email phoneNumber fullName');
 
     // Create a map of registered identifiers to user info
-    const registeredUsers = users.map(user => ({
-      identifier: user.email,
-      userId: user._id,
-      fullName: user.fullName
-    }));
+    const registeredUsers = users.flatMap(user => {
+      const matches = [];
+      
+      // Add match for email if it's in the identifiers list
+      if (user.email && identifiers.includes(user.email)) {
+        matches.push({
+          identifier: user.email,
+          userId: user._id,
+          fullName: user.fullName
+        });
+      }
+      
+      // Add match for phone if it's in the identifiers list
+      if (user.phoneNumber && identifiers.includes(user.phoneNumber)) {
+        matches.push({
+          identifier: user.phoneNumber,
+          userId: user._id,
+          fullName: user.fullName
+        });
+      }
+      
+      return matches;
+    });
 
     return sendResponse(res, 200, true, "Registered users fetched successfully", {
       registeredUsers
