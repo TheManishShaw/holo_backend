@@ -23,8 +23,37 @@ export const registerUser = async (
   const { fullName, email, password, phone } = req.body;
 
   try {
-    if (!fullName || !email || !password || !phone) {
-      return sendResponse(res, 400, false, "Please add all fields");
+    // Validate required fields
+    const missingFields = [];
+    if (!fullName) missingFields.push("fullName");
+    if (!email) missingFields.push("email");
+    if (!password) missingFields.push("password");
+    if (!phone) missingFields.push("phone");
+
+    if (missingFields.length > 0) {
+      return sendResponse(
+        res,
+        400,
+        false,
+        `Missing required fields: ${missingFields.join(", ")}. Please provide all required information.`
+      );
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return sendResponse(res, 400, false, "Please provide a valid email address.");
+    }
+
+    // Validate password strength
+    if (password.length < 6) {
+      return sendResponse(res, 400, false, "Password must be at least 6 characters long.");
+    }
+
+    // Validate phone format (basic check)
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+    if (!phoneRegex.test(phone.replace(/[\s-]/g, ""))) {
+      return sendResponse(res, 400, false, "Please provide a valid phone number.");
     }
 
     // Check if user exists by email or phone
@@ -34,12 +63,12 @@ export const registerUser = async (
 
     if (userExists) {
       if (userExists.email === email) {
-        return sendResponse(res, 400, false, "Email already registered");
+        return sendResponse(res, 409, false, "This email is already registered. Please use a different email or try logging in.");
       }
       if (userExists.phoneNumber === phone) {
-        return sendResponse(res, 400, false, "Phone number already registered");
+        return sendResponse(res, 409, false, "This phone number is already registered. Please use a different number or try logging in.");
       }
-      return sendResponse(res, 400, false, "User already exists");
+      return sendResponse(res, 409, false, "An account with these credentials already exists. Please try logging in.");
     }
 
     // Hash password
@@ -55,7 +84,7 @@ export const registerUser = async (
     });
 
     if (user) {
-      return sendResponse(res, 201, true, "User registered successfully", {
+      return sendResponse(res, 201, true, "Account created successfully! You are now logged in.", {
         _id: user.id,
         fullName: user.fullName,
         email: user.email,
@@ -63,10 +92,24 @@ export const registerUser = async (
         token: generateToken(user.id),
       });
     } else {
-      return sendResponse(res, 400, false, "Invalid user data");
+      return sendResponse(res, 400, false, "Unable to create account. Please check your information and try again.");
     }
-  } catch (error) {
-    return sendResponse(res, 500, false, (error as Error).message);
+  } catch (error: any) {
+    console.error("Registration error:", error);
+    
+    // Handle MongoDB duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return sendResponse(res, 409, false, `This ${field} is already registered. Please use a different ${field}.`);
+    }
+    
+    // Handle validation errors
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((err: any) => err.message);
+      return sendResponse(res, 400, false, `Validation failed: ${messages.join(", ")}`);
+    }
+    
+    return sendResponse(res, 500, false, "An error occurred while creating your account. Please try again later.");
   }
 };
 
@@ -77,20 +120,46 @@ export const loginUser = async (req: Request, res: Response): Promise<any> => {
   const { email, password } = req.body;
 
   try {
+    // Validate required fields
+    if (!email || !password) {
+      const missing = [];
+      if (!email) missing.push("email");
+      if (!password) missing.push("password");
+      return sendResponse(
+        res,
+        400,
+        false,
+        `Please provide ${missing.join(" and ")} to log in.`
+      );
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return sendResponse(res, 400, false, "Please provide a valid email address.");
+    }
+
     const user = await User.findOne({ email });
 
-    if (user && (await bcrypt.compare(password, user.password || ""))) {
-      return sendResponse(res, 200, true, "Login successful", {
-        _id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        token: generateToken(user.id),
-      });
-    } else {
-      return sendResponse(res, 401, false, "Invalid credentials");
+    if (!user) {
+      return sendResponse(res, 401, false, "No account found with this email. Please check your email or sign up.");
     }
-  } catch (error) {
-    return sendResponse(res, 500, false, (error as Error).message);
+
+    const isPasswordValid = await bcrypt.compare(password, user.password || "");
+    
+    if (!isPasswordValid) {
+      return sendResponse(res, 401, false, "Incorrect password. Please try again or reset your password.");
+    }
+
+    return sendResponse(res, 200, true, "Login successful! Welcome back.", {
+      _id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      token: generateToken(user.id),
+    });
+  } catch (error: any) {
+    console.error("Login error:", error);
+    return sendResponse(res, 500, false, "An error occurred while logging in. Please try again later.");
   }
 };
 
@@ -101,16 +170,26 @@ export const getMe = async (
   req: Request | any,
   res: Response
 ): Promise<any> => {
-  const user = await User.findById(req.user.id);
+  try {
+    if (!req.user || !req.user.id) {
+      return sendResponse(res, 401, false, "Authentication required. Please log in to access your profile.");
+    }
 
-  if (user) {
-    return sendResponse(res, 200, true, "User data fetched successfully", {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return sendResponse(res, 404, false, "User account not found. Your account may have been deleted.");
+    }
+
+    return sendResponse(res, 200, true, "Profile retrieved successfully.", {
       id: user._id,
       fullName: user.fullName,
       email: user.email,
+      phoneNumber: user.phoneNumber,
     });
-  } else {
-    return sendResponse(res, 404, false, "User not found");
+  } catch (error: any) {
+    console.error("Get user error:", error);
+    return sendResponse(res, 500, false, "Unable to retrieve your profile. Please try again later.");
   }
 };
 
@@ -124,11 +203,22 @@ export const forgotPassword = async (
   const { email } = req.body;
 
   try {
+    // Validate email field
+    if (!email) {
+      return sendResponse(res, 400, false, "Please provide your email address to reset your password.");
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return sendResponse(res, 400, false, "Please provide a valid email address.");
+    }
+
     const user = await User.findOne({ email });
 
     if (!user) {
       // For security, don't reveal if user exists
-      return sendResponse(res, 200, true, "Success, an OTP has been sent.");
+      return sendResponse(res, 200, true, "If an account exists with this email, you will receive a password reset code shortly.");
     }
 
     // Generate 6-digit OTP
@@ -148,12 +238,13 @@ export const forgotPassword = async (
     const emailSent = await sendOTPEmail(email, otpCode);
 
     if (emailSent) {
-      return sendResponse(res, 200, true, "Success, an OTP has been sent.");
+      return sendResponse(res, 200, true, "A 6-digit verification code has been sent to your email. Please check your inbox and enter the code to reset your password.");
     } else {
-      return sendResponse(res, 500, false, "Error sending OTP email");
+      return sendResponse(res, 500, false, "Unable to send verification code. Please check your email address and try again.");
     }
-  } catch (error) {
-    return sendResponse(res, 500, false, (error as Error).message);
+  } catch (error: any) {
+    console.error("Forgot password error:", error);
+    return sendResponse(res, 500, false, "An error occurred while processing your request. Please try again later.");
   }
 };
 
@@ -164,6 +255,24 @@ export const verifyOTP = async (req: Request, res: Response): Promise<any> => {
   const { email, otp } = req.body;
 
   try {
+    // Validate required fields
+    if (!email || !otp) {
+      const missing = [];
+      if (!email) missing.push("email");
+      if (!otp) missing.push("verification code");
+      return sendResponse(
+        res,
+        400,
+        false,
+        `Please provide ${missing.join(" and ")} to verify.`
+      );
+    }
+
+    // Validate OTP format (6 digits)
+    if (!/^\d{6}$/.test(otp)) {
+      return sendResponse(res, 400, false, "Verification code must be a 6-digit number.");
+    }
+
     const otpRecord = await OTP.findOne({
       email,
       otp,
@@ -172,7 +281,19 @@ export const verifyOTP = async (req: Request, res: Response): Promise<any> => {
     });
 
     if (!otpRecord) {
-      return sendResponse(res, 400, false, "Invalid or expired OTP");
+      // Check if OTP exists but is expired or used
+      const expiredOTP = await OTP.findOne({ email, otp });
+      
+      if (expiredOTP) {
+        if (expiredOTP.isUsed) {
+          return sendResponse(res, 400, false, "This verification code has already been used. Please request a new code.");
+        }
+        if (expiredOTP.expiresAt < new Date()) {
+          return sendResponse(res, 400, false, "This verification code has expired. Please request a new code.");
+        }
+      }
+      
+      return sendResponse(res, 400, false, "Invalid verification code. Please check the code and try again.");
     }
 
     // Mark OTP as used
@@ -186,11 +307,12 @@ export const verifyOTP = async (req: Request, res: Response): Promise<any> => {
       { expiresIn: "15m" }
     );
 
-    return sendResponse(res, 200, true, "OTP verified successfully", {
+    return sendResponse(res, 200, true, "Verification successful! You can now reset your password.", {
       resetToken,
     });
-  } catch (error) {
-    return sendResponse(res, 500, false, (error as Error).message);
+  } catch (error: any) {
+    console.error("Verify OTP error:", error);
+    return sendResponse(res, 500, false, "An error occurred while verifying your code. Please try again.");
   }
 };
 
@@ -204,21 +326,50 @@ export const resetPassword = async (
   const { resetToken, newPassword } = req.body;
 
   try {
+    // Validate required fields
+    if (!resetToken || !newPassword) {
+      const missing = [];
+      if (!resetToken) missing.push("reset token");
+      if (!newPassword) missing.push("new password");
+      return sendResponse(
+        res,
+        400,
+        false,
+        `Please provide ${missing.join(" and ")} to reset your password.`
+      );
+    }
+
+    // Validate password strength
+    if (newPassword.length < 6) {
+      return sendResponse(res, 400, false, "New password must be at least 6 characters long.");
+    }
+
     // Verify reset token
-    const decoded = jwt.verify(
-      resetToken,
-      process.env.JWT_SECRET || "secret"
-    ) as any;
+    let decoded: any;
+    try {
+      decoded = jwt.verify(
+        resetToken,
+        process.env.JWT_SECRET || "secret"
+      ) as any;
+    } catch (jwtError: any) {
+      if (jwtError.name === "TokenExpiredError") {
+        return sendResponse(res, 400, false, "Your password reset session has expired. Please request a new verification code.");
+      }
+      if (jwtError.name === "JsonWebTokenError") {
+        return sendResponse(res, 400, false, "Invalid reset token. Please request a new verification code.");
+      }
+      throw jwtError;
+    }
 
     if (!decoded || decoded.purpose !== "password_reset") {
-      return sendResponse(res, 400, false, "Invalid or expired reset token");
+      return sendResponse(res, 400, false, "Invalid reset token. Please request a new verification code.");
     }
 
     const email = decoded.email;
     const user = await User.findOne({ email });
 
     if (!user) {
-      return sendResponse(res, 404, false, "User not found");
+      return sendResponse(res, 404, false, "Account not found. Please contact support if you need assistance.");
     }
 
     // Hash new password
@@ -232,9 +383,10 @@ export const resetPassword = async (
     // Invalidate any remaining OTPs for this email
     await OTP.updateMany({ email }, { isUsed: true });
 
-    return sendResponse(res, 200, true, "Password reset successfully");
-  } catch (error) {
-    return sendResponse(res, 400, false, "Invalid or expired reset token");
+    return sendResponse(res, 200, true, "Password reset successfully! You can now log in with your new password.");
+  } catch (error: any) {
+    console.error("Reset password error:", error);
+    return sendResponse(res, 500, false, "An error occurred while resetting your password. Please try again later.");
   }
 };
 
@@ -248,8 +400,28 @@ export const checkRegisteredUsers = async (
   const { identifiers } = req.body;
 
   try {
-    if (!identifiers || !Array.isArray(identifiers) || identifiers.length === 0) {
-      return sendResponse(res, 400, false, "Please provide identifiers array");
+    // Validate identifiers field
+    if (!identifiers) {
+      return sendResponse(res, 400, false, "Please provide an 'identifiers' array containing emails or phone numbers to check.");
+    }
+
+    if (!Array.isArray(identifiers)) {
+      return sendResponse(res, 400, false, "The 'identifiers' field must be an array of emails or phone numbers.");
+    }
+
+    if (identifiers.length === 0) {
+      return sendResponse(res, 400, false, "The 'identifiers' array cannot be empty. Please provide at least one email or phone number.");
+    }
+
+    // Limit array size to prevent abuse
+    if (identifiers.length > 100) {
+      return sendResponse(res, 400, false, "You can check a maximum of 100 identifiers at once. Please reduce the number and try again.");
+    }
+
+    // Validate that identifiers are strings
+    const invalidIdentifiers = identifiers.filter(id => typeof id !== 'string' || id.trim() === '');
+    if (invalidIdentifiers.length > 0) {
+      return sendResponse(res, 400, false, "All identifiers must be non-empty strings (emails or phone numbers).");
     }
 
     // Find users by email OR phone number
@@ -285,11 +457,14 @@ export const checkRegisteredUsers = async (
       return matches;
     });
 
-    return sendResponse(res, 200, true, "Registered users fetched successfully", {
-      registeredUsers
+    return sendResponse(res, 200, true, `Found ${registeredUsers.length} registered user(s) from ${identifiers.length} identifier(s).`, {
+      registeredUsers,
+      totalChecked: identifiers.length,
+      totalFound: registeredUsers.length
     });
-  } catch (error) {
-    return sendResponse(res, 500, false, (error as Error).message);
+  } catch (error: any) {
+    console.error("Check registered users error:", error);
+    return sendResponse(res, 500, false, "An error occurred while checking registered users. Please try again later.");
   }
 };
 
