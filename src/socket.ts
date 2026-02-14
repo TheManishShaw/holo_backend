@@ -110,8 +110,8 @@ async function handleMessageSend(
       sender: senderId,
       body,
       timestamp: Date.now(),
-      deliveredAt: null,
-      readAt: null,
+      deliveredAt: undefined,
+      readAt: undefined,
     });
 
     // 2. Relay to Recipient(s)
@@ -127,11 +127,13 @@ async function handleMessageSend(
     
     // NOTE: This implementation assumes we might need to look up the conversation to find the other user.
     // For speed, let's just send back confirmation to sender
-    ws.send(JSON.stringify({
-      type: 'message:sent',
-      message: newMessage,
-      tempId: data.tempId // Client provided temp ID to correlate
-    }));
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'message:sent',
+        message: newMessage,
+        tempId: data.tempId // Client provided temp ID to correlate
+      }));
+    }
 
     // BROADCAST APPROACH (inefficient but works for small prototypes/demos):
     // Send to everyone else. The client filters by conversationId.
@@ -140,11 +142,11 @@ async function handleMessageSend(
          client.send(JSON.stringify({
            type: 'message:new',
            message: {
-             id: newMessage._id,
+             id: (newMessage as any)._id,
              conversationId,
              sender: senderId,
              body,
-             timestamp: newMessage.timestamp,
+             timestamp: (newMessage as any).timestamp,
            }
          }));
       }
@@ -187,7 +189,9 @@ function handleCallSignaling(
             target.send(JSON.stringify(payload));
         } else {
             // Target offline
-             ws.send(JSON.stringify({ type: 'call:error', message: 'User is offline' }));
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'call:error', message: 'User is offline' }));
+            }
         }
     } else {
         // Broadcast to conversation participants (requires DB lookup)
